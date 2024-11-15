@@ -1,0 +1,3 @@
+1. python -m venv myenv    
+2. '.\myenv\Scripts\activate'
+3. python train.py --data E:\nlcns\dataset\License_Plate_Number\data.yaml --weights E:\nlcns\model\LP_detector_nano_61.pt --img 640 --epochs 50

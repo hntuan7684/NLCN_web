@@ -9,3 +9,6 @@ pyyaml
 requests
 pandas
 seaborn
+flask
+mysql.connector
+pytesseract

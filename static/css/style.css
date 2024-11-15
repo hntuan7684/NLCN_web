@@ -151,3 +151,8 @@ body {
     background-color: #f06262;
     color: #fff;
 }
+
+.img-violation {
+    max-width: 75%;
+    width: 200px;
+}

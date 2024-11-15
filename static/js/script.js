@@ -1,7 +1,7 @@
 // Fetch and update video path based on the selected video
 function fetchVideo() {
   const videoChoice = document.getElementById("video-choice").value;
-  fetch(`?vi_id=${videoChoice}`)
+  fetch(`/get_video?vi_id=${videoChoice}`) // Update route to match your backend
     .then((response) => response.json())
     .then((data) => {
       if (data.status === "success") {
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const licenseNumber = button.getAttribute("data-bs-license");
       const violationType = button.getAttribute("data-bs-violations");
       const violationImage = button.getAttribute("data-bs-images");
-      const violationSpeed = button.getAttribute("data-bs-speed")
+      const violationSpeed = button.getAttribute("data-bs-speed");
       const violationTime = button.getAttribute("data-bs-time"); // Thêm dữ liệu thời gian vi phạm nếu có
 
       // Cập nhật nội dung trong modal
@@ -45,30 +45,34 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// Lấy phần tử video
-const videoElement = document.getElementById("traffic-video");
+function fetchViolations() {
+  $.ajax({
+    url: "/get_violations",
+    method: "GET",
+    success: function (data) {
+      let tableBody = $("#violations-table tbody");
+      tableBody.empty(); // Clear the table before adding new data
 
-// Hàm xử lý Pause
-function pauseVideo() {
-  videoElement.pause(); // Dừng video
-  document.getElementById("pauseButton").disabled = true; // Vô hiệu hóa nút Pause
-  document.getElementById("continueButton").disabled = false; // Kích hoạt nút Continue
+      data.forEach(function (violation) {
+        tableBody.append(
+          `<tr>
+            <td>${violation.license_number}</td>
+            <td><img src="static/images/${violation.image}" alt="Violation Image" width="100"></td>
+            <td>${violation.violation_type}</td>
+            <td>${violation.speed} km/h</td>
+            <td>${violation.timestamp}</td>
+          </tr>`
+        );
+      });
+    },
+    error: function (error) {
+      console.error("Error fetching violations:", error);
+    },
+  });
 }
 
-// Hàm xử lý Continue
-function continueVideo() {
-  videoElement.play(); // Tiếp tục phát video
-  document.getElementById("continueButton").disabled = true; // Vô hiệu hóa nút Continue
-  document.getElementById("pauseButton").disabled = false; // Kích hoạt nút Pause
-}
+// Fetch violations every 5 seconds
+setInterval(fetchViolations, 5000);
 
-// Optional: Add event listeners for video status updates
-videoElement.addEventListener("ended", function () {
-  document.getElementById("continueButton").disabled = true; // Disable continue button if video ends
-});
-videoElement.addEventListener("play", function () {
-  document.getElementById("pauseButton").disabled = false; // Enable pause button when video is playing
-});
-videoElement.addEventListener("pause", function () {
-  document.getElementById("continueButton").disabled = false; // Enable continue button when video is paused
-});
+// Initial fetch on page load
+fetchViolations();

@@ -1,0 +1,13 @@
+train: E:\nlcns\dataset\License_Plate_Number\train\images
+val: E:\nlcns\dataset\License_Plate_Number\valid\images
+test: E:\nlcns\dataset\License_Plate_Number\test\images
+
+nc: 1
+names: ['plate']
+
+roboflow:
+  workspace: bhargav-bik8e
+  project: license-plate-detection-kypkf
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/bhargav-bik8e/license-plate-detection-kypkf/dataset/3
