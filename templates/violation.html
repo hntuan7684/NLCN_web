@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Violation Detail</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-4">Violation Detail</h1>
+        <p><strong>License Plate:</strong> {{ violation[1] }}</p>
+        <p><strong>Violation Type:</strong> {{ violation[3] }}</p>
+        <p><strong>Time:</strong> {{ violation[4] }}</p>
+        <img src="{{ url_for('static', filename=violation[2].split('/')[-1]) }}" class="img-fluid" alt="Violation Image">
+    </div>
+</body>
+</html>
