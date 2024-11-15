@@ -5,11 +5,12 @@ import numpy as np
 import mysql.connector
 from datetime import datetime
 from flask import Flask, Response, render_template
+from flask_socketio import SocketIO, emit
 import pytesseract
 import os
 
 app = Flask(__name__)
-
+socketio = SocketIO(app)
 # Load models only once
 VEHICLE_MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # Load YOLOv5 for vehicle detection
 PLATE_DETECTOR_MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # Placeholder for plate detector
@@ -85,18 +86,17 @@ class TrafficDetection:
         violation_time = datetime.now()
         self.insert_violation(license_number, img_path, "Red Light Violation", 0, violation_time)
     
-    def calculate_speed(self, prev_position, current_position, frame_rate, meters_per_pixel):
+    def calculate_speed(self, prev_position, current_position, frame_rate):
         """
         Tính tốc độ của xe (km/h) dựa trên khoảng cách di chuyển và thời gian giữa các khung hình.
         prev_position, current_position: tọa độ của xe trong các khung hình liên tiếp.
         frame_rate: tần suất khung hình (fps).
-        meters_per_pixel: số mét tương ứng với một pixel.
         """
         # Tính khoảng cách Euclidean giữa hai vị trí
         distance_pixels = np.sqrt((current_position[0] - prev_position[0])**2 + (current_position[1] - prev_position[1])**2)
         
         # Chuyển khoảng cách từ pixel sang mét
-        distance_meters = distance_pixels * meters_per_pixel
+        distance_meters = distance_pixels * self.meters_per_pixel
         
         # Tính thời gian giữa các khung hình (thời gian giữa hai frame)
         time_seconds = 1 / frame_rate  # Thời gian giữa hai khung hình (giây)
@@ -108,6 +108,7 @@ class TrafficDetection:
         speed = speed_mps * 3.6
         
         return speed
+
 
 
     def generate_frames(self):
@@ -153,7 +154,7 @@ class TrafficDetection:
 
                     if vehicle_center in self.vehicle_positions:
                         prev_time, prev_position = self.vehicle_positions[vehicle_center]
-                        speed = self.calculate_speed(prev_position, (x1, y1), self.fps, 0.00245)
+                        speed = self.calculate_speed(prev_position, (x1, y1), self.fps)
 
                         if speed > self.speed_limit:
                             violation_image = frame[y1:y2, x1:x2]
@@ -188,12 +189,21 @@ def index():
     db.close()
     
     return render_template('index.html', violations=violations)
-
+def update_violations():
+    while True:
+        violations = get_violations()
+        socketio.emit('update_violations', violations)
+        time.sleep(2)  # Update every 5 seconds
+        
 @app.route('/video_feed')
 def video_feed():
     video_path = "./static/videos/test_6.mp4"  # Replace with your video source
     traffic_detector = TrafficDetection(video_path)
     return Response(traffic_detector.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+@socketio.on('connect')
+def handle_connect():
+    print("Client connected")
+    
 if __name__ == '__main__':
     app.run(debug=True)

@@ -45,34 +45,23 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-function fetchViolations() {
-  $.ajax({
-    url: "/get_violations",
-    method: "GET",
-    success: function (data) {
-      let tableBody = $("#violations-table tbody");
-      tableBody.empty(); // Clear the table before adding new data
+// WebSocket connection to receive updates
+var socket = io.connect("http://" + document.domain + ":" + location.port);
 
-      data.forEach(function (violation) {
-        tableBody.append(
-          `<tr>
-            <td>${violation.license_number}</td>
-            <td><img src="static/images/${violation.image}" alt="Violation Image" width="100"></td>
-            <td>${violation.violation_type}</td>
-            <td>${violation.speed} km/h</td>
-            <td>${violation.timestamp}</td>
-          </tr>`
-        );
-      });
-    },
-    error: function (error) {
-      console.error("Error fetching violations:", error);
-    },
+socket.on("update_violations", function (data) {
+  var tableBody = document.querySelector("#violations tbody");
+  tableBody.innerHTML = ""; // Clear the current table
+  data.forEach(function (violation) {
+    var row = document.createElement("tr");
+    var cell1 = document.createElement("td");
+    var cell2 = document.createElement("td");
+    var cell3 = document.createElement("td");
+    cell1.textContent = violation.license_number; // License Number
+    cell2.textContent = violation.speed; // Speed
+    cell3.textContent = violation.timestamp; // Violation Time
+    row.appendChild(cell1);
+    row.appendChild(cell2);
+    row.appendChild(cell3);
+    tableBody.appendChild(row);
   });
-}
-
-// Fetch violations every 5 seconds
-setInterval(fetchViolations, 5000);
-
-// Initial fetch on page load
-fetchViolations();
+});
