@@ -34,12 +34,11 @@
             <iframe src="{{ url_for("video_feed") }}" class="iframe justify-content-center mt-4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
             </iframe>
           </div>
-          <div
-            class="video-info text-muted d-flex justify-content-between align-items-center mb-3"
-          >
-            <span><strong>FPS:</strong> </span>
-            <span><strong>Traffic light signal:</strong> </span>
-            <span><strong>Time:</strong>  </span>
+          <div class="video-info text-muted d-flex justify-content-between align-items-center mb-3" >
+            <form method="post" action="/">
+              <input type="file" name="file_path">
+              <input type="submit" value="Submit">  
+            </form>
           </div>
         </div>
 
@@ -63,7 +62,7 @@
                   data-bs-speed="{{ violation[4]}}"
                   data-bs-time="{{ violation[5] }}"
                 >
-                  STT: {{ violation[0] }} | BS: {{ violation[1] }}
+                  STT: {{ violation[0] }} | BS: {{ violation[1] }} | {{ violation[3]}}
                 </button>
               </li>
               {% endfor %} {% else %}

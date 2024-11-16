@@ -58,10 +58,22 @@ class TrafficDetection:
         db.commit()
         db.close()  # Always close the connection after executing the query
         
-    def read_license_plate(self, image):
+    def preprocess_plate_image(self, image):
+        """
+        Preprocess image for better OCR accuracy.
+        """
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        license_number = pytesseract.image_to_string(gray, config='--psm 8')
-        return license_number.strip()
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return binary
+
+    def read_license_plate(self, image):
+        """
+        Read license plate using OCR.
+        """
+        preprocessed_image = self.preprocess_plate_image(image)
+        license_number = pytesseract.image_to_string(preprocessed_image, config='--psm 8')
+        return ''.join(filter(str.isalnum, license_number.strip()))  # Remove invalid characters
     
     def detect_license_plate(self, image):
         results = PLATE_DETECTOR_MODEL(image)  # Using YOLOv5 for plate detection
@@ -78,36 +90,39 @@ class TrafficDetection:
             img_path = f"static/images/{license_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
             cv2.imwrite(img_path, frame)
             violation_time = datetime.now()
-            self.insert_violation(license_number, img_path, "Speeding", speed, violation_time)
+            self.insert_violation(license_number, img_path, "Speeding", float(speed), violation_time)
         
-    def handle_red_light_violation(self, frame, license_number):
+    def handle_red_light_violation(self, frame, license_number, speed):
         img_path = f"static/images/{license_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
         cv2.imwrite(img_path, frame)
         violation_time = datetime.now()
-        self.insert_violation(license_number, img_path, "Red Light Violation", 0, violation_time)
+        self.insert_violation(license_number, img_path, "Red Light Violation", float(speed), violation_time)
     
-    def calculate_speed(self, prev_position, current_position, frame_rate):
+    def calculate_speed(self, prev_position, current_position, frame_rate, meters_per_pixel):
         """
-        Tính tốc độ của xe (km/h) dựa trên khoảng cách di chuyển và thời gian giữa các khung hình.
-        prev_position, current_position: tọa độ của xe trong các khung hình liên tiếp.
-        frame_rate: tần suất khung hình (fps).
+        Calculate the speed of a vehicle (km/h).
         """
-        # Tính khoảng cách Euclidean giữa hai vị trí
-        distance_pixels = np.sqrt((current_position[0] - prev_position[0])**2 + (current_position[1] - prev_position[1])**2)
-        
-        # Chuyển khoảng cách từ pixel sang mét
-        distance_meters = distance_pixels * self.meters_per_pixel
-        
-        # Tính thời gian giữa các khung hình (thời gian giữa hai frame)
-        time_seconds = 1 / frame_rate  # Thời gian giữa hai khung hình (giây)
-        
-        # Tính tốc độ (m/s)
+        # Ensure positions are valid
+        if not prev_position or not current_position:
+            return 0
+
+        # Euclidean distance in pixels
+        distance_pixels = np.sqrt((current_position[0] - prev_position[0])**2 +
+                                (current_position[1] - prev_position[1])**2)
+        # Convert to meters
+        distance_meters = distance_pixels * meters_per_pixel
+
+        # Time interval between frames
+        time_seconds = 1 / frame_rate
+
+        # Speed in m/s
         speed_mps = distance_meters / time_seconds
-        
-        # Chuyển từ m/s sang km/h
-        speed = speed_mps * 3.6
-        
-        return speed
+
+        # Convert to km/h
+        speed_kmh = speed_mps * 3.6
+        return speed_kmh
+
+
 
 
 
@@ -119,21 +134,26 @@ class TrafficDetection:
 
             frame = cv2.resize(frame, (820, 500))
             current_time = time.time()
-            self.fps = 1 / (current_time - self.prev_frame_time) if self.prev_frame_time else 0
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+            if not self.fps or self.fps <= 0:
+                self.fps = 30  # Default FPS if unavailable
+
+            
             self.prev_frame_time = current_time
             self.current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             # Traffic light simulation (green/yellow/red)
+            cv2.putText(frame, "Traffic Signal: ", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             if int(current_time) % 93 < 30:
                 self.signal_status = "green"
-                cv2.putText(frame, "GREEN LIGHT", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, "GREEN", (200, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             elif int(current_time) % 93 < 33:
                 self.signal_status = "yellow"
-                cv2.putText(frame, "YELLOW LIGHT", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                cv2.putText(frame, "YELLOW", (200,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
             else:
                 self.signal_status = "red"
-                cv2.putText(frame, "RED LIGHT", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
+                cv2.putText(frame, "RED", (190, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(frame, f"FPS: {int(self.fps)}", (30, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
             # Draw the reference line for red-light violations
             cv2.line(frame, (20, self.reference_line), (frame.shape[1], self.reference_line), (0, 255, 0), 2)
             vehicle_results = VEHICLE_MODEL(frame)
@@ -149,29 +169,28 @@ class TrafficDetection:
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
                     
                     # Detect license plate number and speed
-                    plate_number = self.detect_license_plate(frame[y1:y2, x1:x2]) or "unknow"
+                    plate_number = self.detect_license_plate(frame[y1:y2, x1:x2])
                     speed = 0
 
                     if vehicle_center in self.vehicle_positions:
                         prev_time, prev_position = self.vehicle_positions[vehicle_center]
-                        speed = self.calculate_speed(prev_position, (x1, y1), self.fps)
+                        speed = self.calculate_speed(prev_position, (x1, y1), self.meters_per_pixel)
 
-                        if speed > self.speed_limit:
+                        if speed >= self.speed_limit:
                             violation_image = frame[y1:y2, x1:x2]
-                            cv2.putText(frame, f"Speed: {int(speed)} km/h", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                            self.handle_violation(violation_image, plate_number or "unknow", speed)
+                            cv2.putText(frame, f"S: {float(speed)} km/h", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                            self.handle_violation(violation_image, plate_number, float(speed)*10000)
 
                     # Display plate number and speed on the frame
-                    cv2.putText(frame, f"Plate: {plate_number}", (x1, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    if speed > 0:
-                        cv2.putText(frame, f"Speed: {int(speed)} km/h", (x1, y2 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    cv2.putText(frame, f"P: {plate_number}", (x1, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                    cv2.putText(frame, f"S: {speed} km/h", (x1, y2 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
                     self.vehicle_positions[vehicle_center] = (current_time, (x1, y1))
 
                     # Check for red light violation
                     if self.signal_status == "red" and y2 > self.reference_line:
                         violation_image = frame[y1:y2, x1:x2]
-                        self.handle_red_light_violation(violation_image, plate_number or "unknow")
+                        self.handle_red_light_violation(violation_image, plate_number, float(speed)*10000)
             
             # Show video feed
             cv2.imshow('Traffic Detection', frame)
@@ -184,7 +203,7 @@ class TrafficDetection:
 def index():
     db = mysql.connector.connect(**db_config)
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM nlcn_violations")
+    cursor.execute("SELECT * FROM nlcn_violations ORDER BY vt_id DESC")
     violations = cursor.fetchall()
     db.close()
     
@@ -197,7 +216,7 @@ def update_violations():
         
 @app.route('/video_feed')
 def video_feed():
-    video_path = "./static/videos/test_6.mp4"  # Replace with your video source
+    video_path = "./static/videos/test_8.mp4"  # Replace with your video source
     traffic_detector = TrafficDetection(video_path)
     return Response(traffic_detector.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
